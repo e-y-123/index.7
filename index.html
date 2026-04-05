@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { margin: 0; overflow: hidden; background: black; }
+  video, canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: auto;
+  }
+</style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script>
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+// --------------------------------------------------
+// PRESSURE POINT MAP (matches your App Inventor text)
+// --------------------------------------------------
+const symptomPoints = {
+  "Headache / Migraine":            "168,127,356",
+  "Sinus Congestion / Pressure":    "94,326,145,374,168",
+  "Eye Strain / Tired Eyes":        "107,336,127,356,133,362",
+  "Jaw Tension / TMJ Pain":         "172,397,234,454",
+  "Facial Stress / Tension":        "168,127,356,152,378",
+  "General Face Relaxation":        "168,127,356"
+};
+
+// Current active point list
+let pressurePointIDs = [];
+
+// --------------------------------------------------
+// Called from App Inventor
+// --------------------------------------------------
+function setSymptom(symptomName) {
+  const list = symptomPoints[symptomName] || "";
+  pressurePointIDs = list.split(",").map(n => parseInt(n));
+}
+
+// --------------------------------------------------
+// FACEMESH SETUP
+// --------------------------------------------------
+const faceMesh = new FaceMesh({
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+});
+
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  refineLandmarks: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+
+// --------------------------------------------------
+// DRAW LOOP
+// --------------------------------------------------
+faceMesh.onResults((results) => {
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+
+  const lm = results.multiFaceLandmarks[0];
+
+  // Draw pressure points
+  ctx.fillStyle = "cyan";
+  pressurePointIDs.forEach(id => {
+    const p = lm[id];
+    if (!p) return;
+
+    const x = p.x * canvas.width;
+    const y = p.y * canvas.height;
+
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, Math.PI * 2);
+    ctx.fill();
+  });
+});
+
+// --------------------------------------------------
+// CAMERA
+// --------------------------------------------------
+const camera = new Camera(video, {
+  onFrame: async () => {
+    await faceMesh.send({ image: video });
+  },
+  width: 640,
+  height: 480
+});
+
+camera.start();
+</script>
+
+</body>
+</html>
